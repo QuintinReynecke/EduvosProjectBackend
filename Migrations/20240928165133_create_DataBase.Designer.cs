@@ -2,44 +2,22 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using WebApi.Helpers;
-
-#nullable disable
 
 namespace APITEST.Migrations
 {
     [DbContext(typeof(DataContext))]
-    partial class DataContextModelSnapshot : ModelSnapshot
+    [Migration("20240928165133_create_DataBase")]
+    partial class create_DataBase
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "8.0.8")
+                .HasAnnotation("ProductVersion", "3.1.4")
                 .HasAnnotation("Relational:MaxIdentifierLength", 64);
-
-            MySqlModelBuilderExtensions.AutoIncrementColumns(modelBuilder);
-
-            modelBuilder.Entity("WebApi.Entities.DepartmentTable", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("Code")
-                        .HasColumnType("longtext");
-
-                    b.Property<string>("Name")
-                        .HasColumnType("longtext");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("DepartmentTable");
-                });
 
             modelBuilder.Entity("WebApi.Entities.FAQTable", b =>
                 {
@@ -47,16 +25,14 @@ namespace APITEST.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
 
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
-
                     b.Property<string>("answer")
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext CHARACTER SET utf8mb4");
 
                     b.Property<string>("department")
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext CHARACTER SET utf8mb4");
 
                     b.Property<string>("question")
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext CHARACTER SET utf8mb4");
 
                     b.HasKey("Id");
 
@@ -69,8 +45,6 @@ namespace APITEST.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
 
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
-
                     b.Property<DateTime?>("DateAdded")
                         .HasColumnType("datetime(6)");
 
@@ -81,7 +55,7 @@ namespace APITEST.Migrations
                         .HasColumnType("int");
 
                     b.Property<string>("message")
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext CHARACTER SET utf8mb4");
 
                     b.HasKey("Id");
 
@@ -96,13 +70,11 @@ namespace APITEST.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
 
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
-
                     b.Property<string>("department")
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext CHARACTER SET utf8mb4");
 
                     b.Property<string>("group_name")
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext CHARACTER SET utf8mb4");
 
                     b.HasKey("Id");
 
@@ -115,37 +87,32 @@ namespace APITEST.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
 
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("Department")
-                        .HasColumnType("longtext");
-
                     b.Property<string>("Name")
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext CHARACTER SET utf8mb4");
 
                     b.Property<string>("Password")
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext CHARACTER SET utf8mb4");
 
                     b.Property<string>("PasswordResetCode")
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext CHARACTER SET utf8mb4");
 
                     b.Property<DateTime?>("PasswordResetExpiration")
                         .HasColumnType("datetime(6)");
 
                     b.Property<string>("ProfilePicture")
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext CHARACTER SET utf8mb4");
 
                     b.Property<string>("RefreshToken")
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext CHARACTER SET utf8mb4");
 
                     b.Property<DateTime>("RefreshTokenExpiration")
                         .HasColumnType("datetime(6)");
 
                     b.Property<string>("Type")
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext CHARACTER SET utf8mb4");
 
                     b.Property<string>("UserName")
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext CHARACTER SET utf8mb4");
 
                     b.HasKey("Id");
 
@@ -158,53 +125,29 @@ namespace APITEST.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("int");
 
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
-
                     b.Property<DateTime?>("DateAdded")
                         .HasColumnType("datetime(6)");
 
                     b.Property<string>("answer")
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext CHARACTER SET utf8mb4");
 
                     b.Property<string>("department")
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext CHARACTER SET utf8mb4");
 
                     b.Property<string>("facultyType")
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext CHARACTER SET utf8mb4");
 
                     b.Property<int>("mainTableFKId")
                         .HasColumnType("int");
 
                     b.Property<string>("question")
-                        .HasColumnType("longtext");
+                        .HasColumnType("longtext CHARACTER SET utf8mb4");
 
                     b.HasKey("Id");
 
                     b.HasIndex("mainTableFKId");
 
                     b.ToTable("PersonalChatsTable");
-                });
-
-            modelBuilder.Entity("WebApi.Entities.SubjectsTable", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("Code")
-                        .HasColumnType("longtext");
-
-                    b.Property<string>("Department")
-                        .HasColumnType("longtext");
-
-                    b.Property<string>("Name")
-                        .HasColumnType("longtext");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("SubjectsTable");
                 });
 
             modelBuilder.Entity("WebApi.Entities.GroupMessageTable", b =>
@@ -214,8 +157,6 @@ namespace APITEST.Migrations
                         .HasForeignKey("mainTableFKId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.Navigation("MainTable");
                 });
 
             modelBuilder.Entity("WebApi.Entities.PersonalChatsTable", b =>
@@ -225,15 +166,6 @@ namespace APITEST.Migrations
                         .HasForeignKey("mainTableFKId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.Navigation("MainTable");
-                });
-
-            modelBuilder.Entity("WebApi.Entities.MainTable", b =>
-                {
-                    b.Navigation("GroupMessageTable");
-
-                    b.Navigation("PersonalChatsTable");
                 });
 #pragma warning restore 612, 618
         }

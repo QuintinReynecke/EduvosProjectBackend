@@ -17,21 +17,17 @@ namespace WebApi.Helpers
 
         public DbSet<MainTable> MainTable { get; set; }
 
-        public DbSet<BusinessHoursTable> BusinessHoursTable { get; set; }
+        public DbSet<FAQTable> FAQTable { get; set; }
 
-        public DbSet<ContactDetailsTable> ContactDetailsTable { get; set; }
+        public DbSet<GroupMessageTable> GroupMessageTable { get; set; }
 
-        public DbSet<PhotosTable> PhotosTable { get; set; }
+        public DbSet<GroupsTable> GroupsTable { get; set; }
 
-        public DbSet<WorkLocationTable> WorkLocationTable { get; set; }
+        public DbSet<PersonalChatsTable> PersonalChatsTable { get; set; }
 
-        public DbSet<UserTable> UserTable { get; set; }
+        public DbSet<DepartmentTable> DepartmentTable { get; set; }
 
-        public DbSet<ReviewTable> ReviewTable { get; set; }
-
-        public DbSet<ServiceList> ServiceList { get; set; }
-
-        public DbSet<JobRequest> JobRequests { get; set; }
+        public DbSet<SubjectsTable> SubjectsTable { get; set; }
 
         public DataContext(DbContextOptions<DataContext> options) : base(options)
         {

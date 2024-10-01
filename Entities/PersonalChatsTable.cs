@@ -1,25 +1,28 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using System.Linq;
-using System.Threading.Tasks;
 
 namespace WebApi.Entities
 {
-    public class WorkLocationTable
+    public class PersonalChatsTable
     {
         [Key]
         public int Id { get; set; }
 
-        public string workInCountry { get; set; }
+        public string facultyType { get; set; }
 
-        public string province { get; set; }
+        public string question { get; set; }
 
-        public string suburb { get; set; }
+        public string answer { get; set; }
+
+        public string department { get; set; }
+
+        public DateTime? DateAdded { get; set; }
 
         [ForeignKey("MainTable")]
         public int mainTableFKId { get; set; }
         public virtual MainTable MainTable { get; set; }
+
     }
+
 }

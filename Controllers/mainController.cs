@@ -1,61 +1,43 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using WebApi.Entities;
 using WebApi.Repositories;
 using WebApi.Helpers;
-using System.Net;
-using System.Net.Http;
+using Microsoft.AspNetCore.Http;
+using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Text;
+using Microsoft.Extensions.Configuration;
+using Microsoft.EntityFrameworkCore;
+using System.IdentityModel.Tokens.Jwt;
+using Microsoft.IdentityModel.Tokens;
 
 namespace WebApplication1.Controllers
 {
     public class mainController : Controller
     {
         public mainRepo myRepo;
+        private DataContext db;
+        private readonly IConfiguration _config;
 
-        public mainController(DataContext T)
+        public mainController(DataContext T, IConfiguration config)
         {
             myRepo = new mainRepo(T);
+            db = T;
+            _config = config;
         }
 
+        // Get
+        // Get FAQ
 
-        [HttpGet("getConnectionStatus/{*url}")]
-        public IActionResult Validate(string url)
+        [HttpGet("getDepartmentList")]
+        public async Task<IActionResult> GetAllDepartment()
         {
             try
             {
-                // Ensure that the URL is properly URL-decoded
-                var decodedUrl = WebUtility.UrlDecode(url);
-
-                var request = WebRequest.Create(decodedUrl);
-                request.Method = "HEAD";
-
-                using (var response = request.GetResponse() as HttpWebResponse)
-                {
-                    if (response?.StatusCode == HttpStatusCode.OK)
-                    {
-                        return Ok(response?.StatusCode);
-                    }
-                    else
-                    {
-                        return Ok(response?.StatusCode);
-                    }
-                }
-            }
-            catch (WebException ex)
-            {
-                return BadRequest("Error occurred: " + ex.Message);
-            }
-        }
-
-        [HttpGet("getJobRequests")]
-        public async Task<IActionResult> GetAllJobRequests()
-        {
-            try
-            {
-                var result = myRepo.getJobRequest();
+                var result = myRepo.getDepartment();
                 return Ok(result);
             }
             catch (Exception e)
@@ -64,12 +46,12 @@ namespace WebApplication1.Controllers
             }
         }
 
-        [HttpGet("getJobRequests/{id}")]
-        public async Task<IActionResult> GetSpecificJobRequest(int id)
+        [HttpGet("getSubjectList/{department}")]
+        public async Task<IActionResult> GetAllSubjects(string department)
         {
             try
             {
-                var result = myRepo.getTheJobRequest(id);
+                var result = myRepo.getSubjects(department);
                 return Ok(result);
             }
             catch (Exception e)
@@ -78,12 +60,12 @@ namespace WebApplication1.Controllers
             }
         }
 
-        [HttpGet("get/{type}")]
-        public async Task<IActionResult> GetAllCategories(string type)
+        [HttpGet("getFAQList/{department}")]
+        public async Task<IActionResult> GetAllFAQ(string department)
         {
             try
             {
-                var result = myRepo.getCategories(type);
+                var result = myRepo.getFAQ(department);
                 return Ok(result);
             }
             catch (Exception e)
@@ -92,13 +74,12 @@ namespace WebApplication1.Controllers
             }
         }
 
-        //Get Spicific Service Type 
-        [HttpGet("getServiceT/{type}")]
-        public async Task<IActionResult> GetServiceT(string type)
+        [HttpGet("getGroupsList/{department}")]
+        public async Task<IActionResult> GetAllGroups(string department)
         {
             try
             {
-                var result = myRepo.getServiceT(type);
+                var result = myRepo.getGroups(department);
                 return Ok(result);
             }
             catch (Exception e)
@@ -107,142 +88,125 @@ namespace WebApplication1.Controllers
             }
         }
 
-        //Get Spicific Service Type 
-        [HttpGet("getUserT/{type}")]
-        public async Task<IActionResult> GetUserT(string type)
+
+        // Login and register 
+        [HttpPost("register")]
+        public async Task<IActionResult> Register([FromBody] RegisterRequest request)
         {
             try
             {
-                var result = myRepo.getUSerT(type);
-                return Ok(result);
+
+                var existingUser = db.MainTable.Any(u => u.UserName == request.UserName);
+                if (existingUser)
+                {
+                    return BadRequest("User already exists.");
+                }
+
+                // Create a new user object
+                var newUser = new MainTable
+                {
+                    UserName = request.UserName,
+                    Password = HashPassword(request.Password),
+                    ProfilePicture = "N/A",
+                    Name = "N/A",
+                    Department = "N/A",
+                    Type = request.Type,
+                };
+
+                // Generate a unique verification code
+                var verificationCode = GenerateVerificationCode();
+
+                // Store the verification code and expiration in the new user object
+                newUser.PasswordResetCode = verificationCode;
+                newUser.PasswordResetExpiration = DateTime.UtcNow.AddMinutes(15); // Code expires in 15 minutes
+
+                db.MainTable.Add(newUser);
+                db.SaveChanges();
+
+                // Send the verification code via email
+                var emailSubject = "EduvosApp: Email Verification";
+                var emailBody = $@"
+                <p>Hello {newUser.UserName},</p>
+                <p>Thank you for registering. Please use the verification code below to verify your email:</p>
+                <h3>{verificationCode}</h3>
+                <p>This code will expire in 15 minutes.</p>";
+
+                var sendEmail = myRepo.SendEmailToPerson(emailSubject, emailBody, newUser.UserName, "", "");
+
+                return Ok();
             }
             catch (Exception e)
             {
-                return BadRequest(e.Message);
+                return BadRequest("An error occurred while processing your request.");
             }
         }
-        // Get user info from main menu  getUSerT
 
-        [HttpGet("getServiceList")]
-        public async Task<IActionResult> GetAllServiceType()
+        [HttpPost("verify-email")]
+        public async Task<IActionResult> VerifyEmail([FromBody] VerifyEmailRequest request)
         {
             try
             {
-                var result = myRepo.getServiceType();
-                return Ok(result);
+                var user = db.MainTable.SingleOrDefault(u => u.UserName == request.Email && u.PasswordResetCode == request.VerificationCode);
+                if (user == null || user.PasswordResetExpiration < DateTime.UtcNow)
+                {
+                    return BadRequest("Invalid or expired verification code.");
+                }
+
+                // Activate the user's account
+                user.PasswordResetCode = null; // Clear the verification code
+                user.PasswordResetExpiration = DateTime.Now; // Clear the expiration time
+                db.SaveChanges();
+
+                return Ok();
             }
             catch (Exception e)
             {
-                return BadRequest(e.Message);
+                return BadRequest("An error occurred while processing your request.");
             }
         }
 
-        [HttpGet("getUserName/{UserName}")]
-        public async Task<IActionResult> GetUserNameInformation(string UserName)
+        [HttpPost("login")]
+        public async Task<IActionResult> Login([FromBody] LoginRequest request)
         {
             try
             {
-                var result = myRepo.getInformationUserName(UserName);
-                return Ok(result);
-            }
-            catch (Exception e)
-            {
-                return BadRequest(e.Message);
-            }
-        }
-        
+                var user = db.MainTable.SingleOrDefault(u => u.UserName == request.Username);
 
-        [HttpGet("getServiceListInfo/{ServiceListID}")]
-        public async Task<IActionResult> GetServiceInformation(int ServiceListID)
-        {
-            try
-            {
-                var result = myRepo.getServiceListInformation(ServiceListID);
-                return Ok(result);
-            }
-            catch (Exception e)
-            {
-                return BadRequest(e.Message);
-            }
-        }
+                if (user == null || !VerifyPasswordHash(request.Password, user.Password))
+                {
+                    return Unauthorized("Invalid username or password.");
+                }
 
-        [HttpGet("getUserInfo/{UserIDnum}")]
-        public async Task<IActionResult> GetUserInformation(int UserIDnum)
-        {
-            try
-            {
-                var result = myRepo.getInformation(UserIDnum);
-                return Ok(result);
-            }
-            catch (Exception e)
-            {
-                return BadRequest(e.Message);
-            }
-        }
+                // Generate JWT and Refresh Token
+                var accessToken = GenerateJwtToken(user);
+                var refreshToken = GenerateRefreshToken();
+                var tokenExpiration = DateTime.UtcNow.AddDays(7);
 
-        [HttpGet("getUserInfoContactDetails/{UserIDnum}")]
-        public async Task<IActionResult> GetUserInformationContactDetails(int UserIDnum)
-        {
-            try
-            {
-                var result = myRepo.getInformationContactDetails(UserIDnum);
-                return Ok(result);
-            }
-            catch (Exception e)
-            {
-                return BadRequest(e.Message);
-            }
-        }
+                // Save refresh token to user and set expiration for 7 days
+                user.RefreshToken = refreshToken;
+                user.RefreshTokenExpiration = tokenExpiration; // 7-day refresh token expiry
+                db.SaveChanges();
 
-        [HttpGet("getUserInfoBusinessHours/{UserIDnum}")]
-        public async Task<IActionResult> GetUserInformationBusinessHours(int UserIDnum)
-        {
-            try
-            {
-                var result = myRepo.getInformationBusinessHours(UserIDnum);
-                return Ok(result);
-            }
-            catch (Exception e)
-            {
-                return BadRequest(e.Message);
-            }
-        }
+                // Set the refresh token in a secure, HttpOnly cookie
+                Response.Cookies.Append("refreshToken", refreshToken, new CookieOptions
+                {
+                    HttpOnly = true, // Prevent JavaScript access
+                    Secure = true, // Ensure it's only sent over HTTPS = true, if testing locally make false
+                    SameSite = SameSiteMode.Strict,
+                    Expires = DateTime.UtcNow.AddDays(7) // Refresh token expires in 7 days
+                });
 
-        [HttpGet("getUserInfoPhotos/{UserIDnum}")]
-        public async Task<IActionResult> GetUserInformationPhotos(int UserIDnum)
-        {
-            try
-            {
-                var result = myRepo.getInformationPhotos(UserIDnum);
-                return Ok(result);
-            }
-            catch (Exception e)
-            {
-                return BadRequest(e.Message);
-            }
-        }
-
-        [HttpGet("getUserInfoWorkLocations/{UserIDnum}")]
-        public async Task<IActionResult> GetUserInformationWorkLocations(int UserIDnum)
-        {
-            try
-            {
-                var result = myRepo.getInformationWorkLocations(UserIDnum);
-                return Ok(result);
-            }
-            catch (Exception e)
-            {
-                return BadRequest(e.Message);
-            }
-        }
-
-        [HttpGet("getUserInfoUsers/{UserIDnum}")]
-        public async Task<IActionResult> GetUserInformationUsers(int UserIDnum)
-        {
-            try
-            {
-                var result = myRepo.getInformationUsers(UserIDnum);
-                return Ok(result);
+                return Ok(new
+                {
+                    AccessToken = accessToken,
+                    RefreshToken = refreshToken,
+                    Username = user.UserName,
+                    ProfilePicture = user.ProfilePicture,
+                    Id = user.Id,
+                    Department = user.Department,
+                    UserType = user.Type,
+                    RefreshTokenExpiration = tokenExpiration
+                });
             }
             catch (Exception e)
             {
@@ -250,572 +214,249 @@ namespace WebApplication1.Controllers
             }
         }
 
-        [HttpGet("getUserReviews/{UserIDnum}")]
-        public async Task<IActionResult> GetUserInformationReviews(int UserIDnum)
+
+        [HttpPost("refresh-token")]
+        public async Task<IActionResult> RefreshToken([FromBody] TokenRequest tokenRequest)
         {
             try
             {
-                var result = myRepo.getInformationReviews(UserIDnum);
-                return Ok(result);
+                // Retrieve the refresh token from the request body
+                var refreshToken = tokenRequest.RefreshToken;
+                var username = tokenRequest.Username;
+
+                // Find the user associated with this refresh token
+                var user = db.MainTable.SingleOrDefault(u => u.UserName == username && u.RefreshToken == refreshToken);
+
+                if (user == null)
+                {
+                    return Unauthorized("Invalid or expired refresh token.");
+                }
+
+                // Generate new JWT and refresh tokens
+                var newAccessToken = GenerateJwtToken(user);
+                var newRefreshToken = GenerateRefreshToken();
+                var newTokenExpiration = DateTime.UtcNow.AddDays(7);
+
+                // Update the refresh token in the database
+                user.RefreshToken = newRefreshToken;
+                user.RefreshTokenExpiration = newTokenExpiration; // New expiration for refresh token
+                db.SaveChanges();
+
+                // Set the refresh token in a secure, HttpOnly cookie with the NEW refresh token
+                Response.Cookies.Append("refreshToken", newRefreshToken, new CookieOptions
+                {
+                    HttpOnly = true, // Prevent JavaScript access
+                    Secure = true, // Ensure it's only sent over HTTPS (for production) set to false for local testing
+                    SameSite = SameSiteMode.Strict,
+                    Expires = DateTime.UtcNow.AddDays(7) // Refresh token expires in 7 days
+                });
+
+                // Return new tokens
+                return Ok(new
+                {
+                    AccessToken = newAccessToken,
+                    RefreshToken = newRefreshToken, // Return the new refresh token
+                    RefreshTokenExpiration = newTokenExpiration
+                });
             }
             catch (Exception e)
             {
-                return BadRequest(e.Message);
+                return BadRequest("Failed to refresh token: " + e.Message);
             }
         }
 
-        //get info for Service page
+        private string GenerateJwtToken(MainTable user)
+        {
+            var key = _config["Jwt:Key"]; // Get secret key from appsettings
+            var keyBytes = Encoding.UTF8.GetBytes(key); // Convert it to byte array
+            var tokenHandler = new JwtSecurityTokenHandler();
 
-        [HttpGet("get/{TypeSelected}/{CountrySelected}/{ProvinceSelected}/{CategorySelected}")]
-        public async Task<IActionResult> GetSelectedUser (string TypeSelected, string CountrySelected, string ProvinceSelected, string CategorySelected)
+            var tokenDescriptor = new SecurityTokenDescriptor
+            {
+                Subject = new ClaimsIdentity(new Claim[]
+                {
+            new Claim(ClaimTypes.Name, user.UserName),
+            new Claim(ClaimTypes.NameIdentifier, user.Id.ToString())
+                }),
+                Expires = DateTime.UtcNow.AddMinutes(15), // Access token expiration (15 minutes)
+                Issuer = _config["Jwt:Issuer"], // Use issuer from appsettings.json
+                Audience = _config["Jwt:Audience"], // Use audience from appsettings.json
+                SigningCredentials = new SigningCredentials(
+                    new SymmetricSecurityKey(keyBytes),
+                    SecurityAlgorithms.HmacSha256Signature
+                )
+            };
+
+            var token = tokenHandler.CreateToken(tokenDescriptor);
+            return tokenHandler.WriteToken(token);
+        }
+
+        private string GenerateRefreshToken()
+        {
+            var randomNumber = new byte[32];
+            using (var rng = RandomNumberGenerator.Create())
+            {
+                rng.GetBytes(randomNumber);
+                return Convert.ToBase64String(randomNumber); // Return a base64-encoded refresh token
+            }
+        }
+
+        private ClaimsPrincipal GetPrincipalFromExpiredToken(string token)
+        {
+            var tokenHandler = new JwtSecurityTokenHandler();
+            var key = Encoding.UTF8.GetBytes(_config["Jwt:Key"]);
+            var tokenValidationParameters = new TokenValidationParameters
+            {
+                ValidateIssuer = true,
+                ValidateAudience = true,
+                ValidateIssuerSigningKey = true,
+                IssuerSigningKey = new SymmetricSecurityKey(key),
+                ValidateLifetime = false, // We are validating manually
+                ValidIssuer = _config["Jwt:Issuer"],
+                ValidAudience = _config["Jwt:Audience"]
+            };
+
+            var principal = tokenHandler.ValidateToken(token, tokenValidationParameters, out var securityToken);
+            var jwtSecurityToken = securityToken as JwtSecurityToken;
+
+            if (jwtSecurityToken == null || !jwtSecurityToken.Header.Alg.Equals(SecurityAlgorithms.HmacSha256, StringComparison.InvariantCultureIgnoreCase))
+            {
+                throw new SecurityTokenException("Invalid token");
+            }
+
+            return principal;
+        }
+
+        private bool VerifyPasswordHash(string password, string storedHash)
+        {
+            using (var sha256 = SHA256.Create())
+            {
+                var computedHash = Convert.ToBase64String(sha256.ComputeHash(Encoding.UTF8.GetBytes(password)));
+                return computedHash == storedHash;
+            }
+        }
+
+        // Forget password / Reset
+        [HttpPost("forgot-password")]
+        public async Task<IActionResult> ForgotPassword([FromBody] GenerateVerificationCode request)
         {
             try
             {
-                var result = myRepo.getSelectedUserInfo(TypeSelected, CountrySelected,  ProvinceSelected, CategorySelected);
-                return Ok(result);
+                var user = db.MainTable.SingleOrDefault(u => u.UserName == request.Email);
+                if (user == null)
+                {
+                    return BadRequest("User not found.");
+                }
+
+                // Generate a unique verification code
+                var verificationCode = GenerateVerificationCode();
+
+                // Store the verification code (this assumes your UserTable has a field for it)
+                user.PasswordResetCode = verificationCode;
+                user.PasswordResetExpiration = DateTime.UtcNow.AddMinutes(15); // Code expires in 15 minutes
+                db.SaveChanges();
+
+                // Send the verification code via email
+                var emailSubject = "EduvosApp: Password Reset Request";
+                var emailBody = $@"
+                <p>Hello {user.UserName},</p>
+                <p>You requested a password reset. Use the verification code below to reset your password:</p>
+                <h3>{verificationCode}</h3>
+                <p>This code will expire in 15 minutes.</p>
+                <p>If you did not request a password reset, please ignore this email.</p>";
+
+                var sendEmail = myRepo.SendEmailToPerson(emailSubject, emailBody, user.UserName, "", "");
+
+                return Ok();
             }
             catch (Exception e)
             {
-                return BadRequest(e.Message);
+                return BadRequest("An error occurred while processing your request.");
             }
         }
 
-        //Filter Search
+        private string GenerateVerificationCode()
+        {
+            var rng = new Random();
+            var code = new StringBuilder();
+            for (int i = 0; i < 6; i++)
+            {
+                code.Append(rng.Next(0, 10));
+            }
+            return code.ToString();
+        }
 
-        //For Just Province
-        [HttpGet("getFilterP/{TypeSelected}/{CountrySelected}/{ProvinceSelected}")]
-        public async Task<IActionResult> GetFilterUserProvince(string TypeSelected, string CountrySelected, string ProvinceSelected)
+        [HttpPost("reset-password")]
+        public async Task<IActionResult> ResetPassword([FromBody] ResetPasswordRequest request)
         {
             try
             {
-                var result = myRepo.getFilterUserInfoProvince(TypeSelected, CountrySelected, ProvinceSelected);
-                return Ok(result);
+                var user = db.MainTable.SingleOrDefault(u => u.UserName == request.Email && u.PasswordResetCode == request.VerificationCode);
+                if (user == null || user.PasswordResetExpiration < DateTime.UtcNow)
+                {
+                    return BadRequest("Invalid or expired verification code.");
+                }
+
+                // Hash the new password
+                user.Password = HashPassword(request.NewPassword);
+                user.PasswordResetCode = null; // Clear the reset code
+                user.PasswordResetExpiration = DateTime.Now; // Clear the expiration time
+                db.SaveChanges();
+
+                return Ok();
             }
             catch (Exception e)
             {
-                return BadRequest(e.Message);
+                return BadRequest("An error occurred while processing your request.");
             }
         }
 
-        //For Just Category
-        [HttpGet("getFilterC/{TypeSelected}/{CategorySelected}")]
-        public async Task<IActionResult> GetFilterUserCategory(string TypeSelected, string CategorySelected)
+        public string HashPassword(string password)
         {
-            try
+            using (var sha256 = SHA256.Create())
             {
-                var result = myRepo.getFilterUserInfoCategory(TypeSelected, CategorySelected);
-                return Ok(result);
-            }
-            catch (Exception e)
-            {
-                return BadRequest(e.Message);
+                var hashedBytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(password));
+                return Convert.ToBase64String(hashedBytes);
             }
         }
+    }
 
-        //For All Filters
-        [HttpGet("getFilterA/{TypeSelected}/{CountrySelected}/{ProvinceSelected}/{CategorySelected}")]
-        public async Task<IActionResult> GetFilterUser(string TypeSelected, string CountrySelected, string ProvinceSelected, string CategorySelected)
-        {
-            try
-            {
-                var result = myRepo.getFilterUserInfo(TypeSelected, CountrySelected, ProvinceSelected, CategorySelected);
-                return Ok(result);
-            }
-            catch (Exception e)
-            {
-                return BadRequest(e.Message);
-            }
-        }
+    public class LoginRequest
+    {
+        public string Username { get; set; }
+        public string Password { get; set; }
+    }
 
-        //Name Search
+    public class TokenRequest
+    {
+        public string AccessToken { get; set; }
+        public string RefreshToken { get; set; }
+        public string Username { get; set; }
+    }
 
-        [HttpGet("getName/{NameOFSearch}")]
-        public async Task<IActionResult> GetNameUser(string NameOFSearch)
-        {
-            try
-            {
-                var result = myRepo.getNameUserInfo(NameOFSearch);
-                return Ok(result);
-            }
-            catch (Exception e)
-            {
-                return BadRequest(e.Message);
-            }
-        }
+    public class GenerateVerificationCode
+    {
+        public string Email { get; set; }
+    }
 
-        //Name Search
+    public class RegisterRequest
+    {
+        public string UserName { get; set; }
+        public string Password { get; set; }
+        public string Type { get; set; }
+    }
 
-        [HttpGet("getServiceName/{ServiceNameOFSearch}")]
-        public async Task<IActionResult> GetServiceNameUser(string ServiceNameOFSearch)
-        {
-            try
-            {
-                var result = myRepo.getServiceNameUserInfo(ServiceNameOFSearch);
-                return Ok(result);
-            }
-            catch (Exception e)
-            {
-                return BadRequest(e.Message);
-            }
-        }
+    public class VerifyEmailRequest
+    {
+        public string Email { get; set; }
+        public string VerificationCode { get; set; }
+    }
 
-        //Adding
-        [HttpPost("CreateJobRequest")]
-        public async Task<IActionResult> AddJobRequest([FromBody] JobRequest T)
-        {
-            try
-            {
-                bool result = myRepo.addTheJobRequest(T);
-                if (result)
-                {
-                    return Ok();
-                }
-                else
-                {
-                    return BadRequest();
-                }
-            }
-            catch (Exception e)
-            {
-                return BadRequest();
-            }
-        }
-
-        [HttpPost("InsertNewServiceType")]
-        public async Task<IActionResult> AddServiceType([FromBody] ServiceList T)
-        {
-            try
-            {
-                bool result = myRepo.addTheServiceType(T);
-                if (result)
-                {
-                    return Ok();
-                }
-                else
-                {
-                    return BadRequest();
-                }
-            }
-            catch (Exception e)
-            {
-                return BadRequest();
-            }
-        }
-
-        [HttpPost("InsertNewUserMain")]
-        public async Task<IActionResult> AddUserMain([FromBody] MainTable T)
-        {
-            try
-            {
-                bool result = myRepo.addTheUserMain(T);
-                if (result)
-                {
-                    return Ok();
-                }
-                else
-                {
-                    return BadRequest();
-                }
-            }
-            catch (Exception e)
-            {
-                return BadRequest();
-            }
-        }
-
-        [HttpPost("InsertNewUserContactDetails")]
-        public async Task<IActionResult> AddUserContactDetails([FromBody] ContactDetailsTable T)
-        {
-            try
-            {
-                bool result = myRepo.addTheUserContactDetails(T);
-                if (result)
-                {
-                    return Ok();
-                }
-                else
-                {
-                    return BadRequest();
-                }
-            }
-            catch (Exception e)
-            {
-                return BadRequest();
-            }
-        }
-
-        [HttpPost("InsertNewUserBussinesH")]
-        public async Task<IActionResult> AddUserBussinesH([FromBody] BusinessHoursTable T)
-        {
-            try
-            {
-                bool result = myRepo.addTheUserBussinesH(T);
-                if (result)
-                {
-                    return Ok();
-                }
-                else
-                {
-                    return BadRequest();
-                }
-            }
-            catch (Exception e)
-            {
-                return BadRequest();
-            }
-        }
-
-        [HttpPost("InsertNewUserPhotos")]
-        public async Task<IActionResult> AddUserPhotos([FromBody] PhotosTable T)
-        {
-            try
-            {
-                bool result = myRepo.addTheUserPhotos(T);
-                if (result)
-                {
-                    return Ok();
-                }
-                else
-                {
-                    return BadRequest();
-                }
-            }
-            catch (Exception e)
-            {
-                return BadRequest();
-            }
-        }
-
-        [HttpPost("InsertNewUserWorkLocations")]
-        public async Task<IActionResult> AddUserWorkLocations([FromBody] WorkLocationTable T)
-        {
-            try
-            {
-                bool result = myRepo.addTheUserWorkLocations(T);
-                if (result)
-                {
-                    return Ok();
-                }
-                else
-                {
-                    return BadRequest();
-                }
-            }
-            catch (Exception e)
-            {
-                return BadRequest();
-            }
-        }
-
-        [HttpPost("InsertNewUserUsers")]
-        public async Task<IActionResult> AddUserUsers([FromBody] UserTable T)
-        {
-            try
-            {
-                bool result = myRepo.addTheUserUsers(T);
-                if (result)
-                {
-                    return Ok();
-                }
-                else
-                {
-                    return BadRequest();
-                }
-            }
-            catch (Exception e)
-            {
-                return BadRequest();
-            }
-        }
-
-        [HttpPost("InsertNewUserReview")]
-        public async Task<IActionResult> AddUserReview([FromBody] ReviewTable T)
-        {
-            try
-            {
-                bool result = myRepo.addTheUserReview(T);
-                if (result)
-                {
-                    return Ok();
-                }
-                else
-                {
-                    return BadRequest();
-                }
-            }
-            catch (Exception e)
-            {
-                return BadRequest();
-            }
-        }
-
-        //update  
-
-        [HttpPut("Update/JobRequests")]
-        public async Task<IActionResult> ChangeJobRequests([FromBody] JobRequest T)
-        {
-            try
-            {
-                bool result = myRepo.ChangeJobRequest(T);
-                if (result)
-                {
-                    return Ok();
-                }
-                else
-                {
-                    return BadRequest();
-                }
-            }
-            catch (Exception e)
-            {
-                return BadRequest();
-            }
-        }
-
-        [HttpPut("Update/UpdateNewServiceType")]
-        public async Task<IActionResult> ChangeServiceTypes([FromBody] ServiceList T)
-        {
-            try
-            {
-                bool result = myRepo.ChangeServiceType(T);
-                if (result)
-                {
-                    return Ok();
-                }
-                else
-                {
-                    return BadRequest();
-                }
-            }
-            catch (Exception e)
-            {
-                return BadRequest();
-            }
-        }
-
-        [HttpPut("Update/UserDetailsMain")]
-        public async Task<IActionResult> ChangeUserMain([FromBody] MainTable T)
-        {
-            try
-            {
-                bool result = myRepo.ChangeUserDetailsMain(T);
-                if (result)
-                {
-                    return Ok();
-                }
-                else
-                {
-                    return BadRequest();
-                }
-            }
-            catch (Exception e)
-            {
-                return BadRequest();
-            }
-        }
-
-        [HttpPut("Update/UserDetailsContactDetails")]
-        public async Task<IActionResult> ChangeUserContactDetails([FromBody] ContactDetailsTable T)
-        {
-            try
-            {
-                bool result = myRepo.ChangeUserDetailsContactDetails(T);
-                if (result)
-                {
-                    return Ok();
-                }
-                else
-                {
-                    return BadRequest();
-                }
-            }
-            catch (Exception e)
-            {
-                return BadRequest();
-            }
-        }
-
-        [HttpPut("Update/UserDetailsBussinesH")]
-        public async Task<IActionResult> ChangeUserBussinesH([FromBody] BusinessHoursTable T)
-        {
-            try
-            {
-                bool result = myRepo.ChangeUserDetailsBussinesH(T);
-                if (result)
-                {
-                    return Ok();
-                }
-                else
-                {
-                    return BadRequest();
-                }
-            }
-            catch (Exception e)
-            {
-                return BadRequest();
-            }
-        }
-
-        [HttpPut("Update/UserDetailsPhotos")]
-        public async Task<IActionResult> ChangeUserPhotos([FromBody] PhotosTable T)
-        {
-            try
-            {
-                bool result = myRepo.ChangeUserDetailsPhotos(T);
-                if (result)
-                {
-                    return Ok();
-                }
-                else
-                {
-                    return BadRequest();
-                }
-            }
-            catch (Exception e)
-            {
-                return BadRequest();
-            }
-        }
-
-
-        [HttpPut("Update/UserDetailsWorkLocations")]
-        public async Task<IActionResult> ChangeUserWorkLocations([FromBody] WorkLocationTable T)
-        {
-            try
-            {
-                bool result = myRepo.ChangeUserDetailsWorkLocations(T);
-                if (result)
-                {
-                    return Ok();
-                }
-                else
-                {
-                    return BadRequest();
-                }
-            }
-            catch (Exception e)
-            {
-                return BadRequest();
-            }
-        }
-
-        [HttpPut("Update/UserDetailsUsers")]
-        public async Task<IActionResult> ChangeUserUsers([FromBody] UserTable T)
-        {
-            try
-            {
-                bool result = myRepo.ChangeUserDetailsUsers(T);
-                if (result)
-                {
-                    return Ok();
-                }
-                else
-                {
-                    return BadRequest();
-                }
-            }
-            catch (Exception e)
-            {
-                return BadRequest();
-            }
-        }
-
-        [HttpPut("Update/UserDetailsReview")]
-        public async Task<IActionResult> ChangeUserReview([FromBody] ReviewTable T)
-        {
-            try
-            {
-                bool result = myRepo.ChangeUserDetailsReview(T);
-                if (result)
-                {
-                    return Ok();
-                }
-                else
-                {
-                    return BadRequest();
-                }
-            }
-            catch (Exception e)
-            {
-                return BadRequest();
-            }
-        }
-
-        // Delete
-        [HttpDelete("DeleteJobRequests/{ID}")]
-        public async Task<ActionResult<MainTable>> DeleteJobRequests(int ID)
-        {
-            try
-            {
-                var result = myRepo.DeleteJobRequest(ID);
-                return Ok(result);
-            }
-            catch (Exception e)
-            {
-                return BadRequest(e.Message);
-            }
-        }
-
-        [HttpDelete("DeleteUser/{UserId}")]
-        public async Task<ActionResult<MainTable>> DeleteUser(int UserId)
-        {
-            try
-            {
-                var result = myRepo.DeleteUserID(UserId);
-                return Ok(result);
-            }
-            catch (Exception e)
-            {
-                return BadRequest(e.Message);
-            }
-        }
-
-        [HttpDelete("DeleteServiceListType/{ServiceListID}")]
-        public async Task<ActionResult<ServiceList>> DeleteServiceListID(int ServiceListID)
-        {
-            try
-            {
-                var result = myRepo.DeleteServiceListID(ServiceListID);
-                return Ok(result);
-            }
-            catch (Exception e)
-            {
-                return BadRequest(e.Message);
-            }
-        }
-
-        // Send Email
-        // For Contact us Page
-
-        [HttpPost("sendMail/{NameSurname}/{UserContactInfo}/{subject}/{body}")]
-        public async Task<IActionResult> send_the_mail(string NameSurname, string UserContactInfo, string subject, string body)
-        {
-            try
-            {
-                var result = myRepo.SendEmail(NameSurname, UserContactInfo, subject, body);
-                return Ok(result);
-            }
-            catch (Exception e)
-            {
-                return BadRequest(e.Message);
-            }
-        }
-
-        // For Contacting a person through the app
-
-        [HttpPost("sendMailServicePage/{NameSurname}/{UserContactInfo}/{subject}/{body}/{ToPerson}")]
-        public async Task<IActionResult> send_the_mail_To_Person(string NameSurname, string UserContactInfo, string subject, string body, string ToPerson)
-        {
-            try
-            {
-                var result = myRepo.SendEmailToPerson(NameSurname, UserContactInfo, subject, body, ToPerson);
-                return Ok(result);
-            }
-            catch (Exception e)
-            {
-                return BadRequest(e.Message);
-            }
-        }
-
+    public class ResetPasswordRequest
+    {
+        public string Email { get; set; }
+        public string VerificationCode { get; set; }
+        public string NewPassword { get; set; }
     }
 }
+
