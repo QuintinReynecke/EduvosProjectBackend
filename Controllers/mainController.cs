@@ -13,6 +13,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.EntityFrameworkCore;
 using System.IdentityModel.Tokens.Jwt;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.AspNetCore.Authorization;
 
 namespace WebApplication1.Controllers
 {
@@ -31,6 +32,48 @@ namespace WebApplication1.Controllers
 
         // Get
         // Get FAQ
+
+        [HttpGet("getUserInfo/{UserIDnum}")]
+        public async Task<IActionResult> GetUserInformation(int UserIDnum)
+        {
+            try
+            {
+                var result = myRepo.getInformation(UserIDnum);
+                return Ok(result);
+            }
+            catch (Exception e)
+            {
+                return BadRequest(e.Message);
+            }
+        }
+
+        [HttpGet("getGroupChatInfo/{GroupID}")]
+        public async Task<IActionResult> GetGroupChatInformation(int GroupID)
+        {
+            try
+            {
+                var result = myRepo.getGroupChatInformation(GroupID);
+                return Ok(result);
+            }
+            catch (Exception e)
+            {
+                return BadRequest(e.Message);
+            }
+        }
+
+        [HttpGet("getGroupID/{groupName}")]
+        public async Task<IActionResult> GetGroupID(string groupName)
+        {
+            try
+            {
+                var result = myRepo.getGroupID(groupName);
+                return Ok(result);
+            }
+            catch (Exception e)
+            {
+                return BadRequest(e.Message);
+            }
+        }
 
         [HttpGet("getDepartmentList")]
         public async Task<IActionResult> GetAllDepartment()
@@ -88,6 +131,101 @@ namespace WebApplication1.Controllers
             }
         }
 
+        // Put
+        [HttpPut("Update/UserDetailsMain")]
+        [Authorize]
+        public async Task<IActionResult> ChangeUserMain([FromBody] MainTable T)
+        {
+            try
+            {
+                // Get the logged-in user's ID from the JWT token
+                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                var userRoleClaim = User.FindFirst(ClaimTypes.Role)?.Value;
+
+                // Log the received claims for debugging
+                Console.WriteLine($"User ID from token: {userIdClaim}");
+                Console.WriteLine($"User Role from token: {userRoleClaim}");
+
+                if (userIdClaim == null || !int.TryParse(userIdClaim, out int userId))
+                {
+                    return Unauthorized("Invalid user ID in token.");
+                }
+
+                // Authorize: Allow if the logged-in user is the owner or an Admin
+                if (userId != T.Id && userRoleClaim != "Admin")
+                {
+                    return Forbid("You are not allowed to update this user's details.");
+                }
+
+                // Update the details
+                bool result = myRepo.ChangeUserDetailsMain(T);
+                if (result)
+                {
+                    return Ok();
+                }
+                else
+                {
+                    return BadRequest("Failed to update user details.");
+                }
+            }
+            catch (Exception e)
+            {
+                return BadRequest(e.Message);
+            }
+        }
+
+        // Post
+        [HttpPost("createNewChat")]
+        public async Task<IActionResult> AddNewChat([FromBody] PersonalChatsTable T)
+        {
+            try
+            {
+                bool result = myRepo.addnewChat(T);
+                if (result)
+                {
+                    return Ok();
+                }
+                else
+                {
+                    return BadRequest();
+                }
+            }
+            catch (Exception e)
+            {
+                return BadRequest();
+            }
+        }
+
+        [HttpPost("sendMessage")]
+        public async Task<IActionResult> SendMessage([FromBody] MessageDto newMessage)
+        {
+            try
+            {
+                if (newMessage == null || string.IsNullOrEmpty(newMessage.Message))
+                {
+                    return BadRequest("Invalid message data");
+                }
+
+                var message = new GroupMessageTable
+                {
+                    group_id = newMessage.GroupId,
+                    message = newMessage.Message,
+                    DateAdded = DateTime.Now,
+                    mainTableFKId = newMessage.SenderId // This should be the ID of the user sending the message
+                };
+
+                db.GroupMessageTable.Add(message);
+                await db.SaveChangesAsync();
+
+                return Ok(message); // Optionally return the newly created message
+            }
+            catch (Exception e)
+            {
+                return BadRequest(e.Message);
+            }
+        }
+
+
 
         // Login and register 
         [HttpPost("register")]
@@ -110,6 +248,7 @@ namespace WebApplication1.Controllers
                     ProfilePicture = "N/A",
                     Name = "N/A",
                     Department = "N/A",
+                    Groups = "",
                     Type = request.Type,
                 };
 
@@ -457,6 +596,13 @@ namespace WebApplication1.Controllers
         public string Email { get; set; }
         public string VerificationCode { get; set; }
         public string NewPassword { get; set; }
+    }
+
+    public class MessageDto
+    {
+        public int GroupId { get; set; }
+        public string Message { get; set; }
+        public int SenderId { get; set; }  // The sender's ID (linked to MainTable)
     }
 }
 

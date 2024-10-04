@@ -18,7 +18,34 @@ namespace WebApi.Repositories
         }
 
         // get Functions
-        
+        public object getInformation(int UserIDnum)
+        {
+            var result = db.MainTable.Where(x => x.Id == UserIDnum).ToList();
+            return result;
+        }
+
+
+        public object getGroupChatInformation(int GroupID)
+        {
+            var result = db.GroupMessageTable
+                .Where(x => x.group_id == GroupID)
+                .Select(x => new {
+                    x.Id,
+                    x.message,
+                    x.DateAdded,
+                    SenderName = x.MainTable.Name,  // Assuming MainTable contains sender's name
+                    GroupId = x.group_id
+                })
+                .OrderBy(x => x.DateAdded)
+                .ToList();
+            return result;
+        }
+
+        public object getGroupID(string groupName)
+        {
+            var result = db.SubjectsTable.Where(x => x.Code == groupName).ToList();
+            return result;
+        }
 
         public object getDepartment()
         {
@@ -48,11 +75,40 @@ namespace WebApi.Repositories
 
         public object getGroups(string department)
         {
-            var result = db.GroupsTable.Where(x => x.department.Contains(department)).ToList();
+            var result = db.SubjectsTable.Where(x => x.Department.Contains(department)).ToList();
             return result;
         }
 
+        // Put
 
+        public bool ChangeUserDetailsMain(MainTable T)
+        {
+            try
+            {
+                db.MainTable.Update(T);
+                db.SaveChanges();
+                return true;
+            }
+            catch (Exception e)
+            {
+                return false;
+            }
+        }
+
+        // Post
+        public bool addnewChat(PersonalChatsTable T)
+        {
+            try
+            {
+                db.PersonalChatsTable.Add(T);
+                db.SaveChanges();
+                return true;
+            }
+            catch (Exception e)
+            {
+                return false;
+            }
+        }
 
         // Send Email
 
