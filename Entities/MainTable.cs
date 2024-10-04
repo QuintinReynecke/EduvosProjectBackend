@@ -23,6 +23,8 @@ namespace WebApi.Entities
 
         public string Department { get; set; }
 
+        public string Groups { get; set; }
+
         public string PasswordResetCode { get; set; }
 
         public DateTime? PasswordResetExpiration { get; set; }
